@@ -38,26 +38,28 @@ import os
 import sys
 from PIL import Image
 
+#Drive connection-----------------------------------------------------------------------------
 from google.colab import drive
 drive.mount('/content/drive')
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-K=5
-arc='vgg16'
-loss_func = nn.CrossEntropyLoss()
+
+#Define parameters of experience--------------------------------------------------------------
+K=5 #Nº of outputs
+arc='vgg16'# Architecture
+loss_func = nn.CrossEntropyLoss() 
 lr=0.0001
 b_s=32
-ep=50-5
+ep=50
 PATH='/content/drive/My Drive/ML/model.pth'
 PATH2='/content/drive/My Drive/ML/files/last.pth'
-#APAGAR-------------------------------------
-#with open('/content/drive/My Drive/ML/Resultados/readme.txt', 'w') as f:
-    #f.write('')
+
+#Escreve os parametros-------------------------------------------
 #with open('/content/drive/My Drive/ML/Resultados/readme.txt', 'a') as f:
     #f.write('------------------------------------------------\nParametros:\n\nEpochs'+str(ep)+'\nArc:'+arc+'\nLearning rate:'+str(lr)+'\nBatch size:'+str(b_s))
 
+    
 #Standerdize the image----------------------------------------------------------------------
-
 transform = transforms.Compose([            #[1]
  #transforms.Resize(224),                    #[2]
  #transforms.CenterCrop(224),                #[3]
@@ -67,12 +69,13 @@ transform = transforms.Compose([            #[1]
  std=[0.229, 0.224, 0.225]                  #[7]
  )])
 
+#Ler o ficheiro pickle com nome + output das imagens------------------------------------------------
 infile = open('/content/drive/My Drive/ML/NCI_data.pickle','rb')
 data=pickle.load(infile)
 infile.close
 print(data)
 
-
+#Class dataset-------------------------------------------------------------------------------------------
 class MyDataset(Dataset):
    def __init__(self, type, transform, path,fold):
        self.X,self.Y=data[fold][type]
@@ -95,6 +98,8 @@ class MyDataset(Dataset):
    def __len__(self):
        return len(self.X)
 
+
+#Criar Dataloaders---------------------------------------------------------------------------------------
 ds= MyDataset('train',transform,'/content/drive/My Drive/ML/train/Transform/',1)
 tr = DataLoader(ds, b_s, True)
 #v_ds= MyDataset('val',transform,'/content/drive/My Drive/ML/CVT_1/Transform',1)
@@ -102,10 +107,8 @@ tr = DataLoader(ds, b_s, True)
 t_ds= MyDataset('test',transform,'/content/drive/My Drive/ML/train/Transform/',1)
 test = DataLoader(t_ds, b_s, True)
 
-print(len(tr))
-print(len(test))
 
-# Model
+# Model-------------------------------------------------------------------------------------------------
 class Base(nn.Module):
     def __init__(self, pretrained_model, n_outputs):
         super().__init__()
@@ -137,6 +140,8 @@ class Base(nn.Module):
     def to_classes(self, Phat):
         return Phat.argmax(1)
 
+    
+#Criar o modelo da CNN ---------------------------------------------------------------------------------------   
 #Give to the model the architecture and number of classes (K)
 model = Base(arc, K)
 #put the model on 'GPU' or 'CPU'
@@ -146,6 +151,8 @@ optimizer = optim.Adam(model.parameters(),lr )
 
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
 
+
+#Iniciar treino + teste---------------------------------------------------------------------------------------
 running_loss=1010.0
 train_acc=0.0
 final_t_a=0.0
@@ -256,10 +263,9 @@ print('Finished Training')
 with open('/content/drive/My Drive/ML/Resultados/readme.txt', 'a') as f:
     f.write('------------------------------------------------\nResultados:\n\nLoss treino:'+str(best_loss_t)+'\nAcc treino:'+str(best_acc_t)+'\nLoss Test:'+str(best_loss)+'\nAcc test:'+str(best_acc))
 
-#Load Model
-#model = Base(, **kwargs)
-#optimizer = TheOptimizerClass(*args, **kwargs)
-
+    
+    
+#Load Model (se interromper o treino) ------------------------------------------------------------------------------------------------------------------------------
 checkpoint = torch.load(PATH2,map_location=torch.device('cpu'))
 model.load_state_dict(checkpoint['model_state_dict'])
 optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -270,13 +276,6 @@ model.eval()
 # - or -
 model.train()
 
-with open('/content/drive/My Drive/ML/Resultados/readme.txt', 'a') as f:
-    f.write('------------------------------------------------\nResultados:\n\nLoss treino:'+str(best_loss_t)+'\nAcc treino:'+str(best_acc_t)+'\nLoss Test:'+str(best_loss)+'\nAcc test:'+str(best_acc))
-
-name='I625976_C1'
-PATH='/content/drive/My Drive/ML/ALTS_1/'
-p=PATH+name
-img=Image.open(p)
 
 model = Base(arc, K)
 #put the model on 'GPU' or 'CPU'
@@ -284,7 +283,7 @@ model = model.to(device)
 model.load_state_dict(torch.load(PATH))
 model.eval()
 
-#evaluate model performance
+#evaluate model performance-----------------------------------------------------------------------------------------------------------
 from sklearn.metrics import classification_report, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
