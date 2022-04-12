@@ -40,6 +40,7 @@ from google.colab import drive
 drive.mount('/content/drive')
 device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
+#Parametros------------------------------------------------------------------------------------------------------------------------
 K=5
 arc='alexnet'
 loss_func = nn.CrossEntropyLoss()
@@ -47,11 +48,6 @@ lr=0.00001
 b_s=32
 ep=50
 PATH='/content/drive/My Drive/ML/model.pth'
-#APAGAR-------------------------------------
-#with open('/content/drive/My Drive/ML/Resultados/readme.txt', 'w') as f:
-#    f.write('')
-#with open('/content/drive/My Drive/ML/Resultados/readme.txt', 'a') as f:
-#    f.write('------------------------------------------------Self-Supervised\nParametros:\n\nEpochs'+str(ep)+'\nArc:'+arc+'\nLearning rate:'+str(lr)+'\nBatch size:'+str(b_s))
 
 #Standerdize the image----------------------------------------------------------------------
 from torchvision.transforms import transforms
@@ -80,6 +76,8 @@ transform_strong = transforms.Compose([
  std=[0.229, 0.224, 0.225]                  #[7]
  )])
 
+
+#Abrir pickles com data------------------------------------------------------------------------------------------------------------------------
 infile = open('/content/drive/My Drive/ML/NCI_data.pickle','rb')
 data=pickle.load(infile)
 infile.close
@@ -95,7 +93,9 @@ while(i<len(data_u)):
  x.append(data_u[i][0])
  y.append(data_u[i][1])
  i=i+1
-print(x)
+
+
+#Class Dataset------------------------------------------------------------------------------------------------------------------------
 class MyDataset(Dataset):
    def __init__(self, type,datas, transform,strong, path,fold):
        if(type=='unlabeled_w' or type=='unlabeled_s'  ):
@@ -130,6 +130,7 @@ class MyDataset(Dataset):
    def __len__(self):
        return len(self.X)
 
+#Criar Dataloaders------------------------------------------------------------------------------------------------------------------------
 ds= MyDataset('train',data,transform,transform_strong,'/content/drive/My Drive/ML/train/Transform/',1)
 tr = DataLoader(ds, b_s, True)
 #v_ds= MyDataset('val',transform,'/content/drive/My Drive/ML/CVT_1/Transform',1)
@@ -141,10 +142,7 @@ unl_w = DataLoader(uw_ds, b_s, True)
 us_ds= MyDataset('unlabeled_s',data_u,transform,transform_strong,'/content/drive/My Drive/ML/train/Transform/',1)
 unl_s = DataLoader(us_ds, b_s, True)
 
-print(len(tr))
-print(len(test))
-
-# Model
+# Models------------------------------------------------------------------------------------------------------------------------
 class Base(nn.Module):
     def __init__(self, pretrained_model, n_outputs):
         super().__init__()
@@ -176,6 +174,9 @@ class Base(nn.Module):
     def to_classes(self, Phat):
         return Phat.argmax(1)
 
+    
+    
+#Criar a CNN------------------------------------------------------------------------------------------------------------------------    
 #Give to the model the architecture and number of classes (K)
 model = Base(arc, K)
 #put the model on 'GPU' or 'CPU'
@@ -185,6 +186,7 @@ optimizer = optim.Adam(model.parameters(),lr )
 
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
 
+#Treino------------------------------------------------------------------------------------------------------------------------
 import torch.nn.functional as F
 gama=0.2
 thresh=0.8
@@ -264,137 +266,3 @@ for epoch in range(ep):
       if avg_acc>=best_acc and running_loss<=best_loss :
              best_acc=avg_acc
              best_loss=running_loss
-
-running_loss=1010.0
-train_acc=0.0
-final_t_a=0.0
-l_train=546*32
-l_test=182*32
-avg_acc=0.0
-best_loss=1000.0
-best_acc=0.0
-torch.cuda.empty_cache()
-best_acc_t=0
-best_loss_t=0
-
-##Train the dataset
-for epoch in range(ep):  # loop over the dataset multiple times
-        print('\n')
-        print('Iteração:',epoch)
-        print('loss:',running_loss)
-        print('acc:',avg_acc)
-        running_loss2=0.0
-        train_acc=0.0
-        final_t_a=0.0
-        avg_acc2=0.0
-        
-        ##Test the dataset
-        for inputs,labels in test:
-            # get the inputs; data is a list of [inputs, labels]
-            for x,y in iputs,labels:
-              if(y>-2):
-                inputs_l.append(x)
-                labels_l.appens(y)
-              else:
-                inputs_u.append(x)
-                labels_u.append(y)
-            inputs_l, labels_l = inputs_l.to(device),labels_l.to(device)
-            labels_l = labels_l.type(torch.LongTensor)
-            labels_l=labels_l.to(device)
-            inputs_u, labels_u = inputs_u.to(device),labels_u.to(device)
-            labels_u = labels_u.type(torch.LongTensor)
-            labels_u=labels_u.to(device)
-            # forward + backward + optimize
-            outputs =model(inputs_l)
-            
-            
-            #print(outputs)
-            loss2 = loss_func(outputs, labels_l)
-            _, predicted = torch.max(outputs, 1)
-            real=labels_l
-            correct = (predicted == real).float().sum()
-            avg_acc2 +=correct*100/l_test
-            print('.',end='')
-           
-            running_loss2 += loss2.item()
-
-            outputs =model(inputs_u)
-
-           
-        print('\n')
-        print('loss:',running_loss2)
-        print('acc:',avg_acc2)
-        print('Finished Validation')
-
-        if avg_acc2>=best_acc and running_loss2<=best_loss :
-             best_acc=avg_acc2
-             best_loss=running_loss2
-             torch.save(model.state_dict(), PATH)
-             print('saved')
-     
-
-        running_loss = 0.0
-        avg_acc = 0        
-        for inputs,labels in tr:
-            # get the inputs; data is a list of [inputs, labels]
-            inputs, labels = inputs.to(device),labels.to(device)
-            labels = labels.type(torch.LongTensor)
-            labels=labels.to(device)
-            # zero the parameter gradients
-            optimizer.zero_grad()
-
-            # forward + backward + optimize
-            outputs =model(inputs)
-            #print(outputs)
-            loss = loss_func(outputs, labels)
-            loss.backward()
-            optimizer.step()
-            
-            #print(outputs)
-            #print(labels)
-            _, predicted = torch.max(outputs, 1)
-            real=labels
-            correct = (predicted == real).float().sum()
-            avg_acc +=correct*100/l_train
-            print('.',end='')
-           
-            running_loss += loss.item()
-            if avg_acc>=best_acc and running_loss<=best_loss :
-             best_acc_t=avg_acc
-             best_loss_t=running_loss
-             
-            
-           
-
-print('Finished Training')
-
-
-with open('/content/drive/My Drive/ML/Resultados/readme.txt', 'a') as f:
-    f.write('------------------------------------------------\nResultados:\n\nLoss treino:'+str(best_loss_t)+'\nAcc treino:'+str(best_acc_t)+'\nLoss Test:'+str(best_loss)+'\nAcc test:'+str(best_acc))
-
-model = Base(arc, K)
-#put the model on 'GPU' or 'CPU'
-model = model.to(device)
-model.load_state_dict(torch.load(PATH))
-model.eval()
-
-#evaluate model performance
-from sklearn.metrics import classification_report, confusion_matrix
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-y_pred=predict_proba(val)
-Phat = []
-
-for inputs,labels in val:
-            y_true=labels
-            Phat += list(y_true.cpu().numpy())
-
-
-print(Phat)
-print(y_pred)
-print('Classification Report:\n', classification_report(Phat, y_pred))
-
-print('Confusion Matrix:')
-cm = sns.heatmap(confusion_matrix(Phat, y_pred), annot=True, cmap='Blues')
-plt.show()
